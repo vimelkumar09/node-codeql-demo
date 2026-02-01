@@ -64,24 +64,45 @@ docker build -t codeql-demo .
 docker run -p 3000:3000 codeql-demo
 ```
 
-#### Option 2: With Nginx Reverse Proxy
+#### Option 2: Using Docker Compose (Recommended)
 
+**Standard deployment:**
 ```bash
-# Build the Nginx variant
-docker build -f Dockerfile.nginx -t codeql-demo-nginx .
-
-# Run the container
-docker run -p 3000:3000 codeql-demo-nginx
+docker-compose up
 ```
 
-#### Option 3: With Apache Reverse Proxy
-
+**With Nginx reverse proxy:**
 ```bash
-# Build the Apache variant
-docker build -f Dockerfile.apache -t codeql-demo-apache .
+docker-compose --profile nginx up
+```
 
-# Run the container
-docker run -p 3000:3000 codeql-demo-apache
+**With Apache reverse proxy:**
+```bash
+docker-compose --profile apache up
+```
+
+#### Option 3: Manual Reverse Proxy Setup
+
+**Nginx variant:**
+```bash
+# Build and run the app
+docker build -t codeql-demo .
+docker run -d --name app -e PORT=3001 codeql-demo
+
+# Build and run Nginx
+docker build -f Dockerfile.nginx -t codeql-nginx .
+docker run -d --name nginx -p 3000:3000 --link app:app-backend codeql-nginx
+```
+
+**Apache variant:**
+```bash
+# Build and run the app
+docker build -t codeql-demo .
+docker run -d --name app -e PORT=3001 codeql-demo
+
+# Build and run Apache
+docker build -f Dockerfile.apache -t codeql-apache .
+docker run -d --name apache -p 3000:3000 --link app:app-backend codeql-apache
 ```
 
 ## 📋 API Endpoints
@@ -134,6 +155,155 @@ Runs automated tests:
 - Validates code quality
 
 ## 📚 Using This for Training
+
+### Step-by-Step Demo Guide
+
+#### Phase 1: Introduction (5-10 minutes)
+
+1. **Overview of CodeQL**
+   - Explain what CodeQL is (semantic code analysis engine)
+   - How it differs from traditional linters
+   - Benefits of automated security scanning
+
+2. **Repository Tour**
+   - Show the simple Node.js Express application
+   - Point out the intentional vulnerabilities
+   - Explain that these are real-world vulnerability patterns
+
+#### Phase 2: Code Walkthrough (10-15 minutes)
+
+1. **Vulnerability #1: Clear-text Password Logging**
+   ```javascript
+   // src/index.js lines 16-21
+   console.log(`Login attempt: user=${user}, password=${password}`);
+   ```
+   - Explain CWE-532: Information Exposure Through Log Files
+   - Real-world impact: Compromised logs = compromised credentials
+   - Proper fix: Never log sensitive data
+
+2. **Vulnerability #2: CORS Misconfiguration**
+   ```javascript
+   // src/index.js lines 24-29
+   res.setHeader('Access-Control-Allow-Origin', '*');
+   res.setHeader('Access-Control-Allow-Credentials', 'true');
+   ```
+   - Explain CWE-346: Origin Validation Error
+   - Real-world impact: Credential theft via malicious websites
+   - Proper fix: Specify allowed origins explicitly
+
+3. **Vulnerability #3: Disabled TLS Validation**
+   ```javascript
+   // src/index.js line 32
+   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+   ```
+   - Explain CWE-295: Improper Certificate Validation
+   - Real-world impact: Man-in-the-middle attacks
+   - Proper fix: Never disable certificate validation
+
+4. **Vulnerability #4: Command Injection**
+   ```javascript
+   // src/index.js lines 36-42
+   exec(`ping -c 1 ${host}`, ...);
+   ```
+   - Explain CWE-78: OS Command Injection
+   - Demo: Show how `host=127.0.0.1; cat /etc/passwd` could work
+   - Proper fix: Use execFile with argument arrays or input validation
+
+5. **Vulnerability #5: SQL Injection**
+   ```javascript
+   // src/index.js line 52
+   client.query(`SELECT * FROM users WHERE id = ${id};`);
+   ```
+   - Explain CWE-89: SQL Injection
+   - Demo: Show how `id=1 OR 1=1` could extract all records
+   - Proper fix: Use parameterized queries
+
+#### Phase 3: Running CodeQL Scan (10-15 minutes)
+
+1. **Trigger the Scan**
+   - Push the code to GitHub (or create a PR)
+   - Navigate to Actions tab
+   - Show the CodeQL workflow running
+
+2. **View Results**
+   - Go to Security > Code scanning alerts
+   - Show each detected vulnerability
+   - Explain severity levels (Critical, High, Medium, Low)
+
+3. **Explore Alert Details**
+   - Click on an alert
+   - Show the data flow visualization
+   - Explain how CodeQL traces the vulnerability
+   - Show recommended fixes
+
+#### Phase 4: Docker Deployment Demo (10 minutes)
+
+1. **Standard Deployment**
+   ```bash
+   docker-compose up
+   ```
+   - Show the app running on port 3000
+   - Test endpoints with curl
+
+2. **With Reverse Proxy**
+   ```bash
+   docker-compose --profile nginx up
+   ```
+   - Explain benefits of reverse proxy (SSL termination, load balancing, caching)
+   - Show Nginx handling requests and proxying to Node.js
+
+3. **Test the Application**
+   ```bash
+   # Health check
+   curl http://localhost:3000/
+
+   # Test vulnerable endpoint
+   curl http://localhost:3000/ping?host=127.0.0.1
+   ```
+
+#### Phase 5: Fixing Vulnerabilities (15-20 minutes)
+
+Create a new branch and demonstrate fixes:
+
+1. **Fix Password Logging**
+   ```javascript
+   console.log(`Login attempt: user=${user}`);
+   // Password removed from logs
+   ```
+
+2. **Fix CORS**
+   ```javascript
+   const allowedOrigins = ['https://trusted-domain.com'];
+   if (allowedOrigins.includes(req.headers.origin)) {
+     res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+   }
+   ```
+
+3. **Fix TLS Validation**
+   ```javascript
+   // Simply remove or comment out the line
+   // process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+   ```
+
+4. **Fix Command Injection**
+   ```javascript
+   import { execFile } from 'child_process';
+   execFile('ping', ['-c', '1', host], ...);
+   // Or use input validation
+   ```
+
+5. **Fix SQL Injection**
+   ```javascript
+   const result = await client.query(
+     'SELECT * FROM users WHERE id = $1',
+     [id]
+   );
+   ```
+
+6. **Re-run CodeQL**
+   - Push the fixed branch
+   - Show CodeQL scan passing
+   - Compare before/after in Security tab
 
 ### Presenting CodeQL Demo
 

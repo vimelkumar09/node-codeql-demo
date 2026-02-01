@@ -1,51 +1,26 @@
-# Multi-stage build with Apache as reverse proxy
-# Stage 1: Build the Node.js application
-FROM node:20-alpine AS nodeapp
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY src ./src
+# Simplified Apache reverse proxy setup
+# Use docker-compose for best results with apache.conf
 
-# Stage 2: Create final image with both Node and Apache
-FROM node:20-alpine
-WORKDIR /app
+FROM httpd:2.4-alpine
 
-# Install Apache (httpd on Alpine)
-RUN apk add --no-cache apache2 apache2-proxy
+# Enable required Apache modules for proxying
+RUN sed -i \
+    -e 's/^#\(LoadModule .*mod_proxy.so\)/\1/' \
+    -e 's/^#\(LoadModule .*mod_proxy_http.so\)/\1/' \
+    /usr/local/apache2/conf/httpd.conf
 
-# Copy the Node.js app from the previous stage
-COPY --from=nodeapp /app /app
+# Update Apache to listen on port 3000
+RUN sed -i 's/Listen 80/Listen 3000/' /usr/local/apache2/conf/httpd.conf
 
-# Create Apache configuration directory
-RUN mkdir -p /run/apache2
+# Enable virtual hosts configuration
+RUN echo 'Include conf/extra/httpd-vhosts.conf' >> /usr/local/apache2/conf/httpd.conf
 
-# Update Apache configuration for port 3000 and enable proxy
-RUN sed -i 's/^Listen 80/Listen 3000/' /etc/apache2/httpd.conf && \
-    sed -i 's/^#LoadModule proxy_module/LoadModule proxy_module/' /etc/apache2/httpd.conf && \
-    sed -i 's/^#LoadModule proxy_http_module/LoadModule proxy_http_module/' /etc/apache2/httpd.conf
+# Copy custom Apache configuration
+COPY apache.conf /usr/local/apache2/conf/extra/httpd-vhosts.conf
 
-# Create Apache virtual host configuration
-RUN echo '<VirtualHost *:3000> \n\
-    ServerName localhost \n\
-    \n\
-    ProxyPreserveHost On \n\
-    ProxyPass / http://localhost:3001/ \n\
-    ProxyPassReverse / http://localhost:3001/ \n\
-    \n\
-    ErrorLog /dev/stderr \n\
-    CustomLog /dev/stdout common \n\
-</VirtualHost>' > /etc/apache2/conf.d/app.conf
-
-# Create startup script
-RUN echo '#!/bin/sh \n\
-set -e \n\
-echo "Starting Node.js application on port 3001..." \n\
-cd /app && PORT=3001 node src/index.js & \n\
-echo "Waiting for Node.js to start..." \n\
-sleep 2 \n\
-echo "Starting Apache on port 3000..." \n\
-exec httpd -D FOREGROUND' > /start.sh && chmod +x /start.sh
+# Note: This expects the Node.js app to be running separately
+# For standalone use, build with docker-compose
 
 EXPOSE 3000
 
-CMD ["/start.sh"]
+CMD ["httpd-foreground"]
