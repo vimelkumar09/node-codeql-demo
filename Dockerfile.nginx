@@ -1,0 +1,14 @@
+# Simplified Nginx reverse proxy setup
+# Use docker-compose for best results with nginx.conf
+
+FROM nginx:alpine
+
+# Copy custom Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Note: This expects the Node.js app to be running separately
+# For standalone use, build with docker-compose
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

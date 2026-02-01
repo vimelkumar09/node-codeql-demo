@@ -1,0 +1,26 @@
+# Simplified Apache reverse proxy setup
+# Use docker-compose for best results with apache.conf
+
+FROM httpd:2.4-alpine
+
+# Enable required Apache modules for proxying
+RUN sed -i \
+    -e 's/^#\(LoadModule .*mod_proxy.so\)/\1/' \
+    -e 's/^#\(LoadModule .*mod_proxy_http.so\)/\1/' \
+    /usr/local/apache2/conf/httpd.conf
+
+# Update Apache to listen on port 3000
+RUN sed -i 's/Listen 80/Listen 3000/' /usr/local/apache2/conf/httpd.conf
+
+# Enable virtual hosts configuration
+RUN echo 'Include conf/extra/httpd-vhosts.conf' >> /usr/local/apache2/conf/httpd.conf
+
+# Copy custom Apache configuration
+COPY apache.conf /usr/local/apache2/conf/extra/httpd-vhosts.conf
+
+# Note: This expects the Node.js app to be running separately
+# For standalone use, build with docker-compose
+
+EXPOSE 3000
+
+CMD ["httpd-foreground"]

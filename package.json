@@ -1,7 +1,11 @@
 {
+	"name": "node-codeql-demo",
+	"version": "1.0.0",
+	"type": "module",
+	"description": "CodeQL security demonstration with intentional vulnerabilities",
 	"scripts": {
 		"start": "node src/index.js",
-		"test": "jest --runInBand"
+		"test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
 	},
 	"dependencies": {
 		"express": "^5.2.1",
