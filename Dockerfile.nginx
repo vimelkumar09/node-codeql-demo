@@ -1,0 +1,58 @@
+# Multi-stage build with Nginx as reverse proxy
+# Stage 1: Build the Node.js application
+FROM node:20-alpine AS nodeapp
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY src ./src
+
+# Stage 2: Create final image with both Node and Nginx
+FROM node:20-alpine
+WORKDIR /app
+
+# Install Nginx
+RUN apk add --no-cache nginx
+
+# Copy the Node.js app from the previous stage
+COPY --from=nodeapp /app /app
+
+# Create Nginx configuration directory
+RUN mkdir -p /etc/nginx/http.d
+
+# Create Nginx configuration
+RUN echo 'server { \n\
+    listen 3000; \n\
+    server_name localhost; \n\
+    \n\
+    location / { \n\
+        proxy_pass http://localhost:3001; \n\
+        proxy_http_version 1.1; \n\
+        proxy_set_header Upgrade $http_upgrade; \n\
+        proxy_set_header Connection "upgrade"; \n\
+        proxy_set_header Host $host; \n\
+        proxy_set_header X-Real-IP $remote_addr; \n\
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \n\
+        proxy_set_header X-Forwarded-Proto $scheme; \n\
+    } \n\
+    \n\
+    # Health check endpoint \n\
+    location /nginx-health { \n\
+        access_log off; \n\
+        return 200 "Nginx is running\\n"; \n\
+        add_header Content-Type text/plain; \n\
+    } \n\
+} \n' > /etc/nginx/http.d/default.conf
+
+# Create startup script
+RUN echo '#!/bin/sh \n\
+set -e \n\
+echo "Starting Node.js application on port 3001..." \n\
+cd /app && PORT=3001 node src/index.js & \n\
+echo "Waiting for Node.js to start..." \n\
+sleep 2 \n\
+echo "Starting Nginx on port 3000..." \n\
+exec nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
+
+EXPOSE 3000
+
+CMD ["/start.sh"]
