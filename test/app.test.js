@@ -1,4 +1,5 @@
 describe("placeholder", () => {
-	  test("always true", () => {
-		      expect(true).toBe(true);
-		    });
+  test("always true", () => {
+    expect(true).toBe(true);
+  });
+});
